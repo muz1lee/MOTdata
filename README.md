@@ -2,4 +2,4 @@ Implementations for 'An Optimal Transport Approach to Personalized Federated Lea
 
 
 
-10.6 Update barycenter calculations for MNIST datasets 
+10.6 Update barycenter calculations for MNIST datasets in folder WBTransport

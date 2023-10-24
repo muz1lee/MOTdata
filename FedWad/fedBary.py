@@ -73,7 +73,7 @@ class localOT:
 
             # on client S , int_m就是实验中的gamma
             interp_G.fit(xs,xt, a=ws, b=wt)
-            G, weight_G, cost_g = interp_G.int_m, interp_G.weights, interp_G.cost
+            G, weight_G, cost_g,plan_g,unnomorlized_plan = interp_G.int_m, interp_G.weights, interp_G.cost, interp_G.plan,interp_G.unnomorlized_plan
             interp_G.int_init = G  # G就是interpolation measure
 
             # on client T
@@ -123,6 +123,8 @@ class localOT:
         self.weights = weight_int_m
         self.list_cost = list_cost
         self.cost = cost_g
+        self.plan = plan_g
+        self.unnomorlized_plan = unnomorlized_plan
         # self.planS, self.planT = planS, planT
         # self.plan = planS @ planT * nt
         # self.list_int_meas = list_int_m
@@ -205,7 +207,7 @@ def interp_meas(X,Y,t_val=None,metric='sqeuclidean',approx_interp=True,
     # compute EMD
     norm = np.max(M) if np.max(M)>1 else 1
     G0 = ot.emd(a, b, M/norm)
-    
+    unnomorlized_GO = ot.emd(a, b, M)
     
     t = np.random.rand(1) if t_val==None else t_val
     #print('t',t)
@@ -216,11 +218,11 @@ def interp_meas(X,Y,t_val=None,metric='sqeuclidean',approx_interp=True,
         Z, weights = get_interp_measure(X,Y,G0,t)
     cost = np.sum(G0*M)**(1/p)
     # 计算source到interpolating measure 的plan , 这里权重我用的都是uniform的
-    M_s = ot.dist(X, Z, metric=metric)
-    norm = np.max(M_s) if np.max(M_s) > 1 else 1
-    G0_s = ot.emd(a, b, M_s )
+    # M_s = ot.dist(X, Z, metric=metric)
+    # norm = np.max(M_s) if np.max(M_s) > 1 else 1
+    G0_s =None
 
-    return Z, weights, cost, G0,G0_s
+    return Z, weights, cost, G0,G0_s , unnomorlized_GO
 
 
 
@@ -322,14 +324,15 @@ class InterpMeas:
         """
         t = np.random.rand(1)[0] if self.t_val==None else self.t_val
         if not self.learn_support:
-            Z, weights, cost, G0, GOs = interp_meas(X,Y,t_val=t,metric=self.metric,
+            Z, weights, cost, G0, GOs,unnomorlized_GO= interp_meas(X,Y,t_val=t,metric=self.metric,
                                                a=a,b=b,approx_interp=self.approx_interp)
             self.t = t
             self.int_m = Z 
             self.cost = cost
             self.plan = G0
             self.weights = weights
-            self.sourceplan = GOs.T
+            self.sourceplan = None
+            self.unnomorlized_plan = unnomorlized_GO
         elif self.learn_support and self.server == True:
             t = np.random.rand(1)[0] if self.t_val==None else self.t_val
             p = 2 if self.metric=='sqeuclidean' else 1    
@@ -351,7 +354,17 @@ class InterpMeas:
 
 
 
+def barycenter_calculation(Xs):
+    cXs = np.concatenate(Xs, axis=0)
+    barycenter_solver = partial(sinkhorn_barycenter, numItermax=numItermax,
+                                reg=reg_e_bar, limit_max=1e+3, stopThr=1, ys=None, ybar=None, verbose=False)
+    Xbar, ybar = bar_zeros_initializer(cXs, None)
 
+    weights = unif(len(cXs))
+    mu_s = [unif(X.shape[0]) for X in Xs]
+
+    bary, couplings = barycenter_solver(mu_s=mu_s, Xs=Xs, Xbar=Xbar)
+    return bary
 
 if __name__ == '__main__':
 
@@ -364,7 +377,7 @@ if __name__ == '__main__':
     mu_t = np.array([4, 4])
     cov_t = np.array([[0.2, 0], [0, 0.2]])
 
-    mu_k = np.array([9, 9])
+    mu_k = np.array([1, 1])
     cov_k = np.array([[0.2, 0], [0, 0.2]])
 
     mu_bary = np.array([0, 0])
@@ -410,9 +423,10 @@ if __name__ == '__main__':
     weight_int_m = [np.ones(n_supp) / n_supp]* num_users
 
     t_val = 0.5
-    n_epoch = 3
-    n_localepoch= 50
+    n_epoch = 50
+    n_localepoch= 100
     total_cost = []
+    new_Q = 0
     for i in range(n_epoch):
         print('i',i)
         cost_lc = []
@@ -429,23 +443,28 @@ if __name__ == '__main__':
         global_eta = []
         global_gamma = []
         supports =[]
-        new_Q = 0
+
         for idx in range(num_users):
+
             print('client {}'.format(idx))
             # server计算三个不同的eta_Q
-            fedot_server = localOT(n_supp=100, n_localepoch=n_localepoch, t_val=t_val,server= True).fit(x_bary, int_m[idx],wint_m =weight_int_m[idx],learn_support =True )
+            fedot_server = localOT(n_supp=100, n_localepoch=n_localepoch, t_val=t_val).fit(x_bary, int_m[idx],wint_m =weight_int_m[idx])
+
             global_eta.append(fedot_server.eta)
             # server和client两两之间的eta要最小化
             interp_m = InterpMeas(metric='sqeuclidean', t_val=t_val, approx_interp=True,
                                   learn_support= False)
             interp_m = interp_m.fit(local_eta[idx], fedot_server.eta, a=local_weights[idx], b=fedot_server.localweight)  # 对公式9的计算
+
+            # sourceplan = fedot_server.unnomorlized_plan
+            # support = np.dot(sourceplan.T, int_m[idx])
             #更新gamma
             int_m[idx], weight_int_m[idx] = interp_m.int_m, interp_m.weights
-            interp_m.int_init = int_m.copy()
+            # interp_m.int_init = int_m.copy()
 
-            sourceplan = fedot_server.sourceplan[0].T
-            inter_support = fedot_server.inter_support
-            support = np.dot(sourceplan, inter_support)
+            # sourceplan = fedot_server.sourceplan[0].T
+            # inter_support = fedot_server.inter_support
+
             #
             # gammai = localOT(n_supp=100, n_localepoch=n_localepoch, t_val=t_val).fit(fedot_server.int_meas, local_eta[idx])
             #
@@ -454,9 +473,11 @@ if __name__ == '__main__':
             # global_gamma.append(gammai.int_meas)
 
             # supports.append( support)
-            new_Q += np.array(support)
-
-        x_bary = new_Q
+            # new_Q += np.array(support)
+        # 更新Q
+        # int_m_copy = int_m
+        # new_Q = barycenter_calculation(int_m_copy)
+        x_bary = barycenter_calculation(int_m)
         print('x_bary', x_bary)
         # int_m = global_gamma
     #     total_cost.append(np.sum(cost_lc)+ np.sum(cost_ls))

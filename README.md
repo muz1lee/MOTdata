@@ -13,9 +13,9 @@ Todo:
 2. implement FedBary without testing data
 3. Domain Adaptation applications 
 
-MNIST iid setting : 
+MNIST iid setting :    
 | user_id  | data_num | classes_num | entropy | 0 | ... | 9  | 
-| --------- | --------- | --------- | ----------- | ---- | ---- | ---- |
+| :---------: | :---------: | :---------: | :-----------: | :----: | :----: | :----: |
 |  0   | 5000 | 10| 3.318743| 518   | ...  | 501 | 
 |  1   | 5000 | 10| 3.319638 |  503   | ...  | 468 | 
 |   ...   |  ... |  ...|  ...|  ... | ... |... |

@@ -8,12 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from utils1 import *
 
-from msda.barycenters import sinkhorn_barycenter
-from ot.da import SinkhornL1l2Transport
-from msda.utils import bar_zeros_initializer
-from ot.utils import unif
-from functools import partial
-from otdd.pytorch.distance import DatasetDistance, FeatureCost
+
 import os
 from utils.options import get_basic_parser, add_fl_parser
 from utils.data_utils import get_fed_data, split_dict_users, get_fed_domain_data
@@ -21,16 +16,8 @@ from utils.log_tools import generate_log_dir
 from utils.global_utils import set_random_seed, resolve_args
 
 import sys
-from models.model_utils import get_model
-from utils.dataset import Emnist
-from utils.constants import DEFAULT_DATA_DIR as root_path
-from utils.client_sampling import one_label, noniid_dir, noniid_label, iid
-from algs.alg_tools import check_client_class_distribution
-from utils.global_utils import draw_bars
-from utils.data_utils import get_fed_data, get_normal_data
-from utils.global_utils import load_pkl
-from torchvision.models import resnet18
 
+from otdd.pytorch.distance import DatasetDistance, FeatureCost
 class localOT:
     def __init__(self, n_supp,n_localepoch, t_val=None, verbose=False,
                  get_int_list=False,
@@ -91,7 +78,7 @@ class localOT:
 
             # on client S , int_m就是实验中的gamma
             interp_G.fit(xs,xt, a=ws, b=wt)
-            G, weight_G, cost_g,plan_g,unnomorlized_plan = interp_G.int_m, interp_G.weights, interp_G.cost, interp_G.plan,interp_G.unnomorlized_plan
+            G, weight_G, cost_g,plan_g = interp_G.int_m, interp_G.weights, interp_G.cost, interp_G.plan
             interp_G.int_init = G  # G就是interpolation measure
 
             # on client T
@@ -142,7 +129,6 @@ class localOT:
         self.list_cost = list_cost
         self.cost = cost_g
         self.plan = plan_g
-        self.unnomorlized_plan = unnomorlized_plan
         # self.planS, self.planT = planS, planT
         # self.plan = planS @ planT * nt
         # self.list_int_meas = list_int_m
@@ -219,13 +205,17 @@ def interp_meas(X,Y,t_val=None,metric='sqeuclidean',approx_interp=True,
     if a is None:  
         a = np.ones((nx,),dtype=np.float64) / nx
     if b is None:
-        b = np.ones((ny,),dtype=np.float64) / ny  
+        b = np.ones((ny,),dtype=np.float64) / ny
+
     # loss matrix
     M = ot.dist(X,Y,metric=metric) # squared euclidean distance 'default' # 计算两个分布的distance matrix
+
     # compute EMD
     norm = np.max(M) if np.max(M)>1 else 1
-    G0 = ot.emd(a, b, M/norm)
-    unnomorlized_GO = ot.emd(a, b, M)
+
+    G0 = ot.emd(a, b, M/norm,numItermax=200000)
+
+    # unnomorlized_GO = ot.emd(a, b, M)
     
     t = np.random.rand(1) if t_val==None else t_val
     #print('t',t)
@@ -240,7 +230,7 @@ def interp_meas(X,Y,t_val=None,metric='sqeuclidean',approx_interp=True,
     # norm = np.max(M_s) if np.max(M_s) > 1 else 1
     G0_s =None
 
-    return Z, weights, cost, G0,G0_s , unnomorlized_GO
+    return Z, weights, cost, G0,G0_s
 
 
 
@@ -342,7 +332,7 @@ class InterpMeas:
         """
         t = np.random.rand(1)[0] if self.t_val==None else self.t_val
         if not self.learn_support:
-            Z, weights, cost, G0, GOs,unnomorlized_GO= interp_meas(X,Y,t_val=t,metric=self.metric,
+            Z, weights, cost, G0, GOs= interp_meas(X,Y,t_val=t,metric=self.metric,
                                                a=a,b=b,approx_interp=self.approx_interp)
             self.t = t
             self.int_m = Z 
@@ -350,7 +340,7 @@ class InterpMeas:
             self.plan = G0
             self.weights = weights
             self.sourceplan = None
-            self.unnomorlized_plan = unnomorlized_GO
+
         elif self.learn_support and self.server == True:
             t = np.random.rand(1)[0] if self.t_val==None else self.t_val
             p = 2 if self.metric=='sqeuclidean' else 1    
@@ -372,73 +362,67 @@ class InterpMeas:
 
 
 if __name__ == '__main__':
+    # processing data and extract augmentated data
+    # data_process_iid()
 
-    parser = add_fl_parser(get_basic_parser())
-    args = parser.parse_args(['--exp_name', 'exp0_ot', '--dataset', 'mnist', '--split', 'iid'])
-
-    args, setting_name, method_name = resolve_args(root='.', args=args)
-    if not args.save_clients:
-        save_dir = os.path.join(args.save_root, args.project_name, args.exp_name, setting_name, method_name)
-    else:
-        save_dir = os.path.join(args.save_root, args.project_name, args.exp_name, setting_name, '_grad', method_name)
-    args.save_dir = generate_log_dir(path=save_dir, is_use_tb=False, has_timestamp=args.timestamp)
-    setting_dir = os.path.join(args.save_root, args.project_name, args.exp_name, setting_name)
-    # # ---------------------------------------------------------------
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-    # set random seed
-    set_random_seed(seed=args.seed)
-
-    if args.dataset in ["digits"]:
-        dataset_train, dataset_test, dict_users_train, dict_users_test = get_fed_domain_data(args.dataset,
-                                                                                             args.bs_train,
-                                                                                             args.data_frac)
-    else:
-        dataset_train, dataset_test, dict_users_train, dict_users_test = get_fed_data(setting_dir, args.dataset,
-                                                                                      args.split, args.num_users,
-                                                                                      args.dir_alpha,
-                                                                                      args.clsnum_peruser,
-                                                                                      args.imb_alpha, args.data_frac)
+    # ot_results = cal_dis()
+    # print('ot_results',ot_results)
+    path = 'data/mnist/iid/augmentated/'
+    XA = np.load(path+'c1xa.npy')
+    XB = np.load(path+'c2xa.npy')
+    XT = np.load(path + 'centralxa.npy')
+    client_list = [XA,XB]
 
 
-    sys.path.append("/Users/muz1lee/Desktop/代码/fedselect/")
 
-    path = "/Users/muz1lee/Desktop/代码/fedselect/exp0_ot/cifar10_dFr1.0_nUs10_iid_f1.0_e100_lEp5_s1/dict_users.pkl"
-    dict_users = load_pkl(path)
-    dataset = get_normal_data('mnist')
-    dataset_train, dataset_test = dataset['train'], dataset['test']
-    results = check_client_class_distribution(dataset_train.targets, dict_users[0])
-    results = results.iloc[:, 4:]
-    draw_bars(results.to_numpy(), title="mnist")
-    df = check_client_class_distribution(dataset_train.targets, dict_users[0])
-    print(df)
+    n_supp = 500
+    dim = XA.shape[1]
+    random_val_init = 1
+    num_users= len(client_list)
 
-    # Embed using a pretrained (+frozen) resnet
-    embedder = resnet18(pretrained=True).eval()
-    embedder.fc = torch.nn.Identity()
-    for p in embedder.parameters():
-        p.requires_grad = False
 
-    # Here we use same embedder for both datasets
-    feature_cost = FeatureCost(src_embedding=embedder,
-                               src_dim=(3, 32, 32),
-                               tgt_embedding=embedder,
-                               tgt_dim=(3, 32, 32),
-                               p=2,
-                               device='-1')
+    int_m = [np.random.randn(n_supp, dim) * random_val_init]* num_users
+    weight_int_m = [np.ones(n_supp) / n_supp]* num_users
 
-    ot_results = []
-    for client_idx in range(10):
-        # for client_idx in [3]:
-        local_train = DatasetSplit(dataset_train, dict_users_train[client_idx])
-        trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, shuffle=False)
-        dist = DatasetDistance(trainloader, dataset_test,
-                               inner_ot_method='exact',
-                               debiased_loss=True,
-                               feature_cost=feature_cost,
-                               sqrt_method='spectral',
-                               sqrt_niters=10,
-                               precision='single',
-                               p=2, entreg=1e-1,
-                               device='-1')
+    t_val = 0.5
+    n_epoch = 50
+    n_localepoch= 10
+    total_cost = []
+    # new_Q = 0
+    # diff_list = []
+    for i in range(n_epoch):
+        print('epoch {}'.format(i))
+        cost_lc = []
+        local_eta = []
+        local_weights=[]
+        for idx,client in enumerate(client_list):
 
-        a = dist._get_label_stats()
+            fedot = localOT(n_supp=n_supp, n_localepoch=n_localepoch, t_val=t_val).fit(client, int_m[idx],weight_int_m[idx])
+            cost_lc.append(fedot.cost)
+            local_eta.append(fedot.eta)
+            local_weights.append(fedot.localweight)
+
+        cost_ls= []
+        global_eta = []
+        global_gamma = []
+        supports =[]
+
+        for idx in range(num_users):
+
+            print('client {}'.format(idx))
+
+            fedot_server = localOT(n_supp=n_supp, n_localepoch=n_localepoch, t_val=t_val).fit(XT, int_m[idx],wint_m =weight_int_m[idx])
+
+            global_eta.append(fedot_server.eta)
+            cost_ls.append(fedot_server.cost)
+
+            interp_m = InterpMeas(metric='sqeuclidean', t_val=t_val, approx_interp=True,
+                                  learn_support= False)
+            interp_m = interp_m.fit(local_eta[idx], fedot_server.eta, a=local_weights[idx], b=fedot_server.localweight)  # 对公式9的计算
+
+            int_m[idx], weight_int_m[idx] = interp_m.int_m, interp_m.weights
+
+
+
+        total_cost.append(np.array(cost_lc)+np.array(cost_ls))
+        print(total_cost[-1])

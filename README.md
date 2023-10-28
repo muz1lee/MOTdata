@@ -22,6 +22,7 @@ MNIST iid setting :
 |  9  | 5000 | 10|3.319255| 503 | ... | 490 | 
 
 **Data Process**: 
+
 1.IID Partition: Each client has the same classes and the same number of classes. Its purpose is to test whether a contribution prediction method yields similar contribution results for approximately similar clients.
 
 2. Same Distribution & Different Size: Data with the same distribution but different sizes; clients 1 and 2 each have 5% of the data; clients 3 and 4 each have 7.5%; clients 5 and 6 each have 10%; clients 7 and 8 each have 12.5%; clients 9 and 10 each have 15%.

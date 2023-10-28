@@ -18,14 +18,16 @@ from utils.global_utils import set_random_seed, resolve_args
 import sys
 
 from otdd.pytorch.distance import DatasetDistance, FeatureCost
-class localOT:
-    def __init__(self, n_supp,n_localepoch, t_val=None, verbose=False,
+
+
+class FedOT:
+    def __init__(self, n_supp, n_epoch, t_val=None, verbose=False,
                  get_int_list=False,
-                 metric='sqeuclidean',server = False ):
+                 metric='sqeuclidean'):
         self.n_supp = n_supp  # n_supp of the interpolating measure
+        self.n_epoch = n_epoch
         self.t_val = t_val
         self.verbose = verbose
-        self.n_localepoch = n_localepoch
         self.get_int_list = get_int_list
         self.metric = metric
         self.random_val_init = 1
@@ -33,9 +35,8 @@ class localOT:
             self.p = 2
         elif self.metric == 'euclidean':
             self.p = 1
-        self.server= server
 
-    def fit(self, xs, xt, wint_m,ws=None, wt=None, approx_interp=True,
+    def fit(self, xs, xt, ws=None, wt=None, approx_interp=True,
             learn_support=False):
         self.approx_interp = approx_interp
         self.learn_support = learn_support
@@ -58,42 +59,45 @@ class localOT:
             else:
                 wt = np.ones((xt.shape[0],), dtype=np.float64) / xt.shape[0]
         # creating object for interpolation
-
         interp_G = InterpMeas(metric=self.metric, t_val=self.t_val, approx_interp=approx_interp,
-                              learn_support=self.learn_support,server= self.server)
-        # interp_H = InterpMeas(metric=self.metric, t_val=self.t_val, approx_interp=approx_interp,
-        #                       learn_support=self.learn_support)
+                              learn_support=self.learn_support)
+        interp_H = InterpMeas(metric=self.metric, t_val=self.t_val, approx_interp=approx_interp,
+                              learn_support=self.learn_support)
+        interp_m = InterpMeas(metric=self.metric, t_val=self.t_val, approx_interp=approx_interp,
+                              learn_support=self.learn_support)
 
-
+        # 初始化interpolating measure in global side
+        int_m = np.random.randn(self.n_supp, dim) * self.random_val_init
+        weight_int_m = np.ones(self.n_supp) / self.n_supp
 
         list_cost = []
         list_int_m = []
         list_int_G = []
+        list_int_H = []
 
-        for i in range(self.n_localepoch):
+        for i in range(self.n_epoch):
             if self.verbose:
                 print(i)
             if self.get_int_list:
                 list_int_m.append(int_m)
 
-            # on client S , int_m就是实验中的gamma
-            interp_G.fit(xs,xt, a=ws, b=wt)
-            G, weight_G, cost_g,plan_g = interp_G.int_m, interp_G.weights, interp_G.cost, interp_G.plan
-            interp_G.int_init = G  # G就是interpolation measure
-
+            # on client S
+            interp_G.fit(int_m, xs, a=weight_int_m, b=ws)
+            G, weight_G, cost_g = interp_G.int_m, interp_G.weights, interp_G.cost
+            interp_G.int_init = G
             # on client T
-            # interp_H.fit(int_m, xt, a=weight_int_m, b=wt)
-            # H, weight_H, cost_h, tplan= interp_H.int_m, interp_H.weights, interp_H.cost , interp_H.plan
-            # interp_H.int_init = H
+            interp_H.fit(int_m, xt, a=weight_int_m, b=wt)
+            H, weight_H, cost_h = interp_H.int_m, interp_H.weights, interp_H.cost
+            interp_H.int_init = H
             # send costs, G and H to the server
             # on server
-            # list_cost.append(cost_g + cost_h)
-            # interp_m = interp_m.fit(H, G, a=weight_H, b=weight_G)  # 对公式9的计算
-            # int_m, weight_int_m = interp_m.int_m, interp_m.weights
-            # interp_m.int_init = int_m.copy()
+            list_cost.append(cost_g + cost_h)
+            interp_m = interp_m.fit(H, G, a=weight_H, b=weight_G)  # 对公式9的计算
+            int_m, weight_int_m = interp_m.int_m, interp_m.weights
+            interp_m.int_init = int_m.copy()
             if self.get_int_list:
                 list_int_G.append(G)
-                # list_int_H.append(H)
+                list_int_H.append(H)
         # preparing output for differentiable cost
         if istensor:
             eps = 1e-6
@@ -118,27 +122,22 @@ class localOT:
                    (torch.sum(Mt * planT) + eps) ** (1 / self.p)
         else:
             nt = xt.shape[0]
-            interp_G.fit(xs, xt)
+            interp_G.fit(xs, int_m)
             G, weight_G, cost_g, planS = interp_G.int_m, interp_G.weights, interp_G.cost, interp_G.plan
-            # interp_H.fit(int_m, xt)
-            # H, weight_G, cost_h, planT = interp_H.int_m, interp_H.weights, interp_H.cost, interp_H.plan
-            # cost = cost_g + cost_h
+            interp_H.fit(int_m, xt)
+            H, weight_G, cost_h, planT = interp_H.int_m, interp_H.weights, interp_H.cost, interp_H.plan
+            cost = cost_g + cost_h
 
         self.int_meas = int_m
         self.weights = weight_int_m
         self.list_cost = list_cost
-        self.cost = cost_g
-        self.plan = plan_g
-        # self.planS, self.planT = planS, planT
-        # self.plan = planS @ planT * nt
-        # self.list_int_meas = list_int_m
-        # self.list_int_G = list_int_G
-        # self.list_int_H = list_int_H
-        self.eta = G
-        self.localweight = weight_G
-        if self.server == True:
-            self.sourceplan = interp_G.plan
-            self.inter_support = interp_G.int_m
+        self.cost = cost
+        self.planS, self.planT = planS, planT
+        self.plan = planS @ planT * nt
+        self.list_int_meas = list_int_m
+        self.list_int_G = list_int_G
+        self.list_int_H = list_int_H
+
         return self
 
 
@@ -370,59 +369,18 @@ if __name__ == '__main__':
     path = 'data/mnist/iid/augmentated/'
     XA = np.load(path+'c1xa.npy')
     XB = np.load(path+'c2xa.npy')
+    XC = np.load(path + 'c3xa.npy')
     XT = np.load(path + 'centralxa.npy')
     client_list = [XA,XB]
-
-
-
-    n_supp = 500
-    dim = XA.shape[1]
-    random_val_init = 1
-    num_users= len(client_list)
-
-
-    int_m = [np.random.randn(n_supp, dim) * random_val_init]* num_users
-    weight_int_m = [np.ones(n_supp) / n_supp]* num_users
-
     t_val = 0.5
-    n_epoch = 50
-    n_localepoch= 10
-    total_cost = []
-    # new_Q = 0
-    # diff_list = []
-    for i in range(n_epoch):
-        print('epoch {}'.format(i))
-        cost_lc = []
-        local_eta = []
-        local_weights=[]
-        for idx,client in enumerate(client_list):
+    fedot_pt = FedOT(n_supp=500, n_epoch=1, metric='sqeuclidean', t_val=t_val)
+    fedot_pt = fedot_pt.fit(torch.from_numpy(XA), torch.from_numpy(XT).requires_grad_(True))
+    print('FedOT sqEuclid Torch :', fedot_pt.cost)
 
-            fedot = localOT(n_supp=n_supp, n_localepoch=n_localepoch, t_val=t_val).fit(client, int_m[idx],weight_int_m[idx])
-            cost_lc.append(fedot.cost)
-            local_eta.append(fedot.eta)
-            local_weights.append(fedot.localweight)
+    fedot_pt = FedOT(n_supp=500, n_epoch=1, metric='sqeuclidean', t_val=t_val)
+    fedot_pt = fedot_pt.fit(torch.from_numpy(XB), torch.from_numpy(XT).requires_grad_(True))
+    print('FedOT sqEuclid Torch :', fedot_pt.cost)
 
-        cost_ls= []
-        global_eta = []
-        global_gamma = []
-        supports =[]
-
-        for idx in range(num_users):
-
-            print('client {}'.format(idx))
-
-            fedot_server = localOT(n_supp=n_supp, n_localepoch=n_localepoch, t_val=t_val).fit(XT, int_m[idx],wint_m =weight_int_m[idx])
-
-            global_eta.append(fedot_server.eta)
-            cost_ls.append(fedot_server.cost)
-
-            interp_m = InterpMeas(metric='sqeuclidean', t_val=t_val, approx_interp=True,
-                                  learn_support= False)
-            interp_m = interp_m.fit(local_eta[idx], fedot_server.eta, a=local_weights[idx], b=fedot_server.localweight)  # 对公式9的计算
-
-            int_m[idx], weight_int_m[idx] = interp_m.int_m, interp_m.weights
-
-
-
-        total_cost.append(np.array(cost_lc)+np.array(cost_ls))
-        print(total_cost[-1])
+    fedot_pt = FedOT(n_supp=500, n_epoch=1, metric='sqeuclidean', t_val=t_val)
+    fedot_pt = fedot_pt.fit(torch.from_numpy(XC), torch.from_numpy(XT).requires_grad_(True))
+    print('FedOT sqEuclid Torch :', fedot_pt.cost)

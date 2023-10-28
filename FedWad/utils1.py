@@ -14,7 +14,7 @@ from utils.options import get_basic_parser, add_fl_parser
 from utils.data_utils import get_fed_domain_data
 from utils.log_tools import generate_log_dir
 from utils.global_utils import set_random_seed, resolve_args
-
+from otdd.pytorch.distance import DatasetDistance, FeatureCost
 import sys
 
 from algs.alg_tools import check_client_class_distribution
@@ -22,6 +22,8 @@ from utils.global_utils import draw_bars
 from utils.data_utils import get_fed_data, get_normal_data
 from utils.global_utils import load_pkl
 from torchvision.models import resnet18
+import math
+import random
 
 def bary_difference(diff_list):
     df = pd.DataFrame(diff_list)
@@ -37,7 +39,7 @@ def bary_difference(diff_list):
     plt.savefig('/Users/muz1lee/Desktop/代码/fedselect/results/gaussian_toy.png')
     plt.show()
 
-def data_process_iid():
+def load_data():
     # only MNIST datasets
     parser = add_fl_parser(get_basic_parser())
     args = parser.parse_args(['--exp_name', 'exp0_ot', '--dataset', 'mnist', '--split', 'iid'])
@@ -72,6 +74,71 @@ def data_process_iid():
     dict_users = load_pkl(path)
     dataset = get_normal_data('mnist')
     dataset_train, dataset_test = dataset['train'], dataset['test']
+
+    return dataset_train, dataset_test,dict_users,dict_users_train
+
+def data_process(case):
+    # only MNIST datasets
+    dataset_train, dataset_test,dict_users,dict_users_train = load_data()
+    # visualizations
+    # results = check_client_class_distribution(dataset_train.targets, dict_users[0])
+    # results = results.iloc[:, 4:]
+    # draw_bars(results.to_numpy(), title="mnist")
+    # df = check_client_class_distribution(dataset_train.targets, dict_users[0])
+    # print(df)
+
+    sys_path = '/Users/muz1lee/Desktop/代码/fedselect/fedewasserstein/data/'
+    print('extract test data... ')
+    path = sys_path + 'central'
+    extract_augdata(path, dataset_test)
+    if case == 2:
+        dict_users_train = imbalance(dataset_train.targets, 10)
+
+    for client_idx in range(10):
+        print('extract client {}th data...'.format(client_idx + 1))
+        path = sys_path + 'c' + str(client_idx + 1)
+        local_train = DatasetSplit(dataset_train, dict_users_train[client_idx])
+        trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, shuffle=False)
+        extract_augdata(path,trainloader)
+
+def imbalance(targets, num_users, data_frac=1.0):
+    """
+    Sample I.I.D. client data from dataset
+    :param targets: dataset.targets
+    :param num_users:
+    :return: dict of {user_id: image indexs}
+    """
+
+    if isinstance(targets, torch.Tensor):
+        targets_array = targets.numpy()
+    elif isinstance(targets, list):
+        targets_array = np.array(targets)
+    else:
+        targets_array = targets
+
+    all_idxs = np.array([i for i in range(len(targets_array))])
+    n_classes = len(np.unique(targets_array))
+    dict_users = {i:[] for i in range(num_users)}
+
+    for c in range(n_classes):
+        for i in range(num_users):
+            ratio = 0.05 + i // 2 * 0.025
+            num_items_per_cls = math.floor(len(targets_array[targets_array==c]) * ratio)
+            ids_cls = all_idxs[np.where(targets_array[all_idxs]==c)[0]]
+            ids_select_cls = np.random.choice(ids_cls, num_items_per_cls, replace=False)
+            ids_select_cls = ids_select_cls.tolist()
+            dict_users[i] += ids_select_cls
+            all_idxs = np.array(list(set(all_idxs) - set(ids_select_cls)))
+    for i in dict_users.keys():
+        random.shuffle(dict_users[i])
+
+    for i in dict_users.keys():
+        data_num = int(len(dict_users[i]) * data_frac)
+        dict_users[i] = dict_users[i][:data_num]
+    return dict_users
+
+def cal_dis():
+    dataset_train, dataset_test,dict_users,dict_users_train = load_data()
     results = check_client_class_distribution(dataset_train.targets, dict_users[0])
     results = results.iloc[:, 4:]
     draw_bars(results.to_numpy(), title="mnist")
@@ -84,22 +151,29 @@ def data_process_iid():
     for p in embedder.parameters():
         p.requires_grad = False
 
-    # Here we use same embedder for both datasets
-
-    sys_path = '../fedewasserstein/data/' # you can change your own path to save the augmentated data
-
-    print('extract test data... ')
-    path = sys_path + 'central'
-    extract_augdata(path, dataset_test)
-
-    for client_idx in range(10):
-        print('extract client {}th data...'.format(client_idx + 1))
-        path = sys_path + 'c' + str(client_idx + 1)
+    feature_cost = FeatureCost(src_embedding=embedder,
+                               src_dim=(3, 32, 32),
+                               tgt_embedding=embedder,
+                               tgt_dim=(3, 32, 32),
+                               p=2,
+                               device='-1')
+    ot_results = []
+    for client_idx in range(2):
+        print('client_idx', client_idx)
         local_train = DatasetSplit(dataset_train, dict_users_train[client_idx])
         trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, shuffle=False)
-        extract_augdata(path,trainloader)
+        dist = DatasetDistance(trainloader, dataset_test,
+                               inner_ot_method='gaussian_approx',
+                               debiased_loss=True,
+                            feature_cost=feature_cost,
+                               sqrt_method='spectral',
+                               sqrt_niters=10,
+                               precision='single',
+                               p=2, entreg=1e-1,
+                               device='cpu')
+        ot_results.append(dist.distance())
 
-
+        return cal_dis
 def extract_augdata(path,data):
     targets1, classes1, idxs1 = extract_data_targets(data)
     vals1, cts1 = torch.unique(targets1, return_counts=True)

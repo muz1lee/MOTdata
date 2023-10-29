@@ -14,7 +14,10 @@ Implementations for 'An Optimal Transport Approach to Personalized Federated Lea
 2. implement FedBary without testing data
 3. Domain Adaptation applications 
 
-MNIST (IID 10 clients) :    
+
+## Data Process
+You can find the processed data in [this link](https://drive.google.com/file/d/11u_XtfH_Ft_8uVT-1VTfuHmR-i0b4fdE/view?usp=sharing)
+### MNIST (IID 10 clients) :    
 | user_id  | data_num | classes_num | entropy | 0 | ... | 9  | 
 | :---------: | :---------: | :---------: | :-----------: | :----: | :----: | :----: |
 |  0   | 5000 | 10| 3.318743| 518   | ...  | 501 | 
@@ -22,8 +25,6 @@ MNIST (IID 10 clients) :
 |   ...   |  ... |  ...|  ...|  ... | ... |... |
 |  9  | 5000 | 10|3.319255| 503 | ... | 490 | 
 
-## Data Process
-You can find the processed data in [this link](https://drive.google.com/file/d/11u_XtfH_Ft_8uVT-1VTfuHmR-i0b4fdE/view?usp=sharing)
 ### IID Partition:
 Each client has the same classes and the same number of classes. Its purpose is to test whether a contribution prediction method yields similar contribution results for approximately similar clients.
 

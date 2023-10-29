@@ -22,7 +22,7 @@ MNIST (IID 10 clients) :
 |  9  | 5000 | 10|3.319255| 503 | ... | 490 | 
 
 ## Data Process
-
+You can find the processed data in [this link](https://drive.google.com/file/d/11u_XtfH_Ft_8uVT-1VTfuHmR-i0b4fdE/view?usp=sharing)
 ### IID Partition:
 Each client has the same classes and the same number of classes. Its purpose is to test whether a contribution prediction method yields similar contribution results for approximately similar clients.
 

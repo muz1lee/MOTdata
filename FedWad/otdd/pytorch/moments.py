@@ -192,6 +192,7 @@ def _single_label_stats(data, i, c, label_indices, M=None, S=None, batch_size=25
 
     """
     device = process_device_arg(device)
+    # For the case 5, this warning should be ignored!
     if len(label_indices) < 2:
         logger.warning(" -- Class '{:10}' has too few examples ({})." \
               " Ignoring it.".format(c, len(label_indices)))
@@ -266,7 +267,7 @@ def compute_label_stats(data, targets=None,indices=None,classnames=None,
         targets (Tensor, optional): If provided, will use this target array to
             avoid re-extracting targets.
         indices (array-like, optional): If provided, filtering is based on these
-            indices (useful if e.g. dataloader has subsampler)
+            indices (useful if e.g. dataloade`r has subsampler)
         eigen_correction (bool, optional):  If ``True``, will shift the covariance
             matrix's diagonal by :attr:`eigen_correction_scale` to ensure PSD'ness.
         eigen_correction_scale (numeric, optional): Magnitude of eigenvalue

@@ -68,9 +68,9 @@ def load_data():
                                                                                       args.imb_alpha, args.data_frac)
 
 
-    sys.path.append("/Users/muz1lee/Desktop/fedselect/")
-    # import your dataset (MNIST here ) 
-    path = "/Users/muz1lee/Desktop/代码/fedselect/exp0_ot/cifar10_dFr1.0_nUs10_iid_f1.0_e100_lEp5_s1/dict_users.pkl" 
+    sys.path.append("/Users/muz1lee/Desktop/代码/fedselect/")
+
+    path = "/Users/muz1lee/Desktop/代码/fedselect/exp0_ot/cifar10_dFr1.0_nUs10_iid_f1.0_e100_lEp5_s1/dict_users.pkl"
     dict_users = load_pkl(path)
     dataset = get_normal_data('mnist')
     dataset_train, dataset_test = dataset['train'], dataset['test']
@@ -94,37 +94,62 @@ def data_process(case):
     if case == 2:
         dict_users_train = imbalance(dataset_train.targets, 10)
 
-    for client_idx in range(10):
-        print('extract client {}th data...'.format(client_idx + 1))
-        path = sys_path + 'c' + str(client_idx + 1)
-        local_train = DatasetSplit(dataset_train, dict_users_train[client_idx])
-        if case ==3:
-            collate_fn1 = partial(collate_fn_label_noise, label_ratio=0.1 * client_idx)
-            trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, collate_fn= collate_fn1,shuffle=False)
-        elif case ==4:
-            collate_fn1 = partial(collate_fn, noise=0.1 * client_idx)
-            trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, collate_fn=
-            collate_fn1, shuffle=False)
-        else:
-            trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, shuffle=False)
-        extract_augdata(path,trainloader)
+    if case ==5 :
+        for cls in range(10):
+            indices = np.where(np.array(dataset_test.targets)==cls)[0]
+            local_test = DatasetSplit(dataset_test, indices)
+            testloader = torch.utils.data.DataLoader(local_test, batch_size=32, shuffle=True)
+            path1 = sys_path + 'cls' + str(cls + 1)
+            # path2 = sys_path +  'c' + str(cls + 1)
+            # local_train = DatasetSplit(dataset_train, dict_users_train[cls])
+            # trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, shuffle=False)
+            # extract_augdata(path2, trainloader)
+            extract_augdata(path1, testloader)
+    else:
+        for client_idx in range(10):
+            print('extract client {}th data...'.format(client_idx + 1))
+            path = sys_path + 'c' + str(client_idx + 1)
+            local_train = DatasetSplit(dataset_train, dict_users_train[client_idx])
+            if case ==3:
+                collate_fn1 = partial(collate_fn_label_noise, label_ratio=0.1 * client_idx)
+                trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, collate_fn= collate_fn1,shuffle=False)
+            elif case ==4:
+                collate_fn1 = partial(collate_fn, noise=0.1 * client_idx)
+                trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, collate_fn=
+                collate_fn1, shuffle=False)
+            else:
+                trainloader = torch.utils.data.DataLoader(local_train, batch_size=32, shuffle=False)
+            extract_augdata(path,trainloader)
 
 
 def collate_fn(samples, noise=0): # feature noise
+    # samples 是一个样本列表，每个样本可以是任意数据类型
+    # 在这里可以对样本进行进一步处理和转换
+    # print(f"noise={noise}")
+    # 例如，假设每个样本都是一个元组 (image, label)
     images, labels = zip(*samples)
 
+    # 对图像进行处理，例如转换为 Tensor 格式、归一化等
     images = torch.stack(images)
     if noise > 0:
         images += torch.Tensor(np.random.normal(0.0, noise, (1, images.size(-2), images.size(-1))))
 
+    # 对标签进行处理，例如转换为 Tensor 格式
     labels = torch.tensor(labels)
 
+    # 返回处理后的批次数据
     return images, labels
 def collate_fn_label_noise(samples, label_ratio=0.0):
+    # samples 是一个样本列表，每个样本可以是任意数据类型
+    # 在这里可以对样本进行进一步处理和转换
+    # print(f"noise={noise}")
+    # 例如，假设每个样本都是一个元组 (image, label)
     images, labels = zip(*samples)
 
+    # 对图像进行处理，例如转换为 Tensor 格式、归一化等
     images = torch.stack(images)
 
+    # 对标签进行处理，例如转换为 Tensor格式
     labels = list(labels)
     cls_list = list(range(10))
     for i in range(len(labels)):
@@ -137,12 +162,19 @@ def collate_fn_label_noise(samples, label_ratio=0.0):
                 labels[i] = rnd_class[1]
     labels = torch.tensor(labels)  # labels是tuple类型。
 
-
+    # 返回处理后的批次数据
     return images, labels
-    
 def collate_fn_label_noise(samples, label_ratio=0.0):
+    # samples 是一个样本列表，每个样本可以是任意数据类型
+    # 在这里可以对样本进行进一步处理和转换
+    # print(f"noise={noise}")
+    # 例如，假设每个样本都是一个元组 (image, label)
     images, labels = zip(*samples)
+
+    # 对图像进行处理，例如转换为 Tensor 格式、归一化等
     images = torch.stack(images)
+
+    # 对标签进行处理，例如转换为 Tensor格式
     labels = list(labels)
     cls_list = list(range(10))
     for i in range(len(labels)):
@@ -154,6 +186,8 @@ def collate_fn_label_noise(samples, label_ratio=0.0):
             else:
                 labels[i] = rnd_class[1]
     labels = torch.tensor(labels)  # labels是tuple类型。
+
+    # 返回处理后的批次数据
     return images, labels
 
 def imbalance(targets, num_users, data_frac=1.0):
@@ -252,6 +286,10 @@ def extract_augdata(path,data):
     np.save(path + 'xa.npy', XA.numpy())
 
 class DatasetSplit(Dataset):
+    """
+        数据集和Dataloader之间的接口。
+    """
+
     def __init__(self, dataset, idxs):
         self.dataset = dataset
         self.idxs = list(idxs)

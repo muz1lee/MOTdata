@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils1 import *
-
+import geomloss
 
 import os
 from utils.options import get_basic_parser, add_fl_parser
@@ -384,3 +384,80 @@ if __name__ == '__main__':
     fedot_pt = FedOT(n_supp=500, n_epoch=1, metric='sqeuclidean', t_val=t_val)
     fedot_pt = fedot_pt.fit(torch.from_numpy(XC), torch.from_numpy(XT).requires_grad_(True))
     print('FedOT sqEuclid Torch :', fedot_pt.cost)
+
+
+
+
+''' 
+For datapoints detection 
+'''
+    training_size = 1000
+    valid_size = 1000
+    resize = 32
+    portion = 0.25
+    loaders, shuffle_ind = load_data_corrupted(corrupt_type='shuffle', dataname='MNIST', resize=resize,
+                                               training_size=training_size, test_size=valid_size, currupt_por=portion)
+
+    trainloader = loaders['train']
+    testloader = loaders['test']
+
+    path = '/Users/muz1lee/Desktop/代码/fedselect/fedewasserstein/data/mnist/detections/'
+    extract_augdata(path, trainloader,'train')
+    extract_augdata(path, testloader,'test')
+
+    XA = np.load(path+'trainxa.npy')
+
+    XT = np.load(path +'testxa.npy')
+    loss = geomloss.SamplesLoss(
+        loss='sinkhorn', p=2,
+        # cost=cost_geomloss,
+        debias=True,
+        blur=0.1 ** (1 / 2),
+        backend='tensorized',
+        potentials=True
+    )
+
+    n_supp = 1000
+    n_epoch = 10
+    t_val = 0.5
+
+    fedot_pt1 = FedOT(n_supp=n_supp, n_epoch=n_epoch, metric='sqeuclidean', t_val=t_val)
+    fedot_pt1 = fedot_pt1.fit(torch.from_numpy(XA), torch.from_numpy(XT).requires_grad_(True))
+    print('FedOT sqEuclid Torch :', fedot_pt1.cost)
+    int_meas1 = fedot_pt1.int_meas
+
+    t_XA =torch.from_numpy(XA).double()
+    t_XT = torch.from_numpy(XT).double()
+    t_int_meas1= torch.from_numpy(int_meas1).double()
+    dual1 = np.array(loss(t_XA, t_int_meas1)[0])
+    dual2 = np.array(loss(t_int_meas1, t_XT)[0])
+    value = values( torch.from_numpy(dual1), len(XA))
+    counts = np.where( np.array(value)>0)[0]
+    index = trainloader.sampler.indices
+    ls= []
+    for item in counts:
+        ls.append(index[item])
+    k=0
+    print(len(ls))
+    for item in ls:
+        if item in shuffle_ind:
+            k +=1
+    print(k/len(shuffle_ind))
+
+    t_XA =torch.from_numpy(XA).double()
+    t_XT = torch.from_numpy(XT).double()
+    # t_int_meas1= torch.from_numpy(int_meas1).double()
+    dual = loss(t_XA, t_XT)[0]
+    value = values(dual, len(XA))
+    counts = np.where( np.array(value)>0)[0]
+    index = trainloader.sampler.indices
+
+    ls= []
+    for item in counts:
+        ls.append(index[item])
+    k=0
+    print(len(ls))
+    for item in ls:
+        if item in shuffle_ind:
+            k +=1
+    print(k/len(shuffle_ind))

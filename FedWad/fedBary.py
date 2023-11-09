@@ -343,6 +343,45 @@ class InterpMeas:
 
 
 
+def values(dual_sol, training_size):
+    dualsol = dual_sol
+
+    f1k = np.array(dualsol.squeeze())
+
+    trainGradient = [0] * training_size
+    trainGradient = (1 + 1 / (training_size - 1)) * f1k - sum(f1k) / (training_size - 1)
+    return list(trainGradient)
+    
+def extract_augdata(data,name,path=None):
+    targets1, classes1, idxs1 = extract_data_targets(data)
+    vals1, cts1 = torch.unique(targets1, return_counts=True)
+    min_labelcount = 2
+    V1 = torch.sort(vals1[cts1 >= min_labelcount])[0]
+    X1, Y1 = load_full_dataset(data, targets=True,
+                               labels_keep=V1,
+                               maxsamples=10000,
+                               device='cpu',
+                               dtype=torch.FloatTensor,
+                               reindex=True,
+                               reindex_start=0)
+    DA = (X1, Y1)
+
+    M1, C1 = compute_label_stats(data, targets1, idxs1, classes1, diagonal_cov=True)
+    XA = augmented_dataset(DA, means=M1, covs=C1, maxn=10000)
+    return XA
+
+def ratio(counts,index,shuffle_ind):
+    ls = []
+    for item in counts:
+        ls.append(index[item])
+    k = 0
+    print(len(ls))
+    for item in ls:
+        if item in shuffle_ind:
+            k += 1
+
+    return k / len(shuffle_ind), k
+    
 
 def barycenter_calculation(Xs):
     cXs = np.concatenate(Xs, axis=0)

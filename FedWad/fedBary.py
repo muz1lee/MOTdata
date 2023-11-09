@@ -395,6 +395,47 @@ def barycenter_calculation(Xs):
     bary, couplings = barycenter_solver(mu_s=mu_s, Xs=Xs, Xbar=Xbar)
     return bary
 
+def detections_case(training_size,valid_size,resize,portion, n_supp ,n_epoch ,t_val=0.5):
+    loss = geomloss.SamplesLoss(
+        loss='sinkhorn', p=2,
+        # cost=cost_geomloss,
+        debias=True,
+        blur=0.1 ** (1 / 2),
+        backend='tensorized',
+        potentials=True
+    )
+
+    loaders, shuffle_ind = load_data_corrupted(corrupt_type='shuffle', dataname='MNIST', resize=resize,
+                                               training_size=training_size, test_size=valid_size, currupt_por=portion)
+
+    trainloader = loaders['train']
+    testloader = loaders['test']
+    index = trainloader.sampler.indices
+
+    path = None
+    XA = extract_augdata(trainloader,'train',path)
+    XT = extract_augdata(testloader,'test',path)
+
+    fedot_pt = localOT(n_supp=n_supp, n_epoch=n_epoch, metric='sqeuclidean', t_val=t_val,get_int_list=True)
+    fedot_pt = fedot_pt.fit(XA, XT.requires_grad_(True)) # This is a simple detection case with accessing local data.
+    int_meas1 = fedot_pt.int_meas
+    client_int_meas =fedot_pt.list_int_G[-1]
+    server_int_meas = fedot_pt.list_int_H[-1]
+
+    t_c_meas = torch.from_numpy(client_int_meas).double()
+    t_s_meas = torch.from_numpy(server_int_meas).double()
+    t_int_meas1= torch.from_numpy(int_meas1).double()
+    t_XA =XA.double()
+    t_XT = XT.double()
+
+    dual = np.array(loss(t_XA, t_XT)[0])
+    
+    value = values(torch.from_numpy(dual), len(XA))
+    counts = np.where(np.array(value) > 0)[0]
+    result, count_num = ratio(counts, index, shuffle_ind)
+
+    return result, count_num
+    
 if __name__ == '__main__':
 
 
@@ -437,15 +478,13 @@ if __name__ == '__main__':
     mu_s = [unif(X.shape[0]) for X in Xs]
 
     bary, couplings = barycenter_solver(mu_s=mu_s, Xs=Xs, Xbar=Xbar)
-    print('bary', bary)
-
+    print('barycenter with accessing local samples', bary)
 
 
     n_supp = 100
     dim = xs.shape[1]
     random_val_init = 1
     num_users= 3
-
 
     int_m = [np.random.randn(n_supp, dim) * random_val_init]* num_users
     weight_int_m = [np.ones(n_supp) / n_supp]* num_users
@@ -486,5 +525,6 @@ if __name__ == '__main__':
 
 
         x_bary = barycenter_calculation(int_m)
-
+        
+    print('approximated barycenter in FL', x_bary)
 

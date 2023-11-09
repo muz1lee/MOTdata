@@ -1,6 +1,8 @@
 
+This is the official implementation for the paper Data Valuation and Detections in Federated Learning.
 
-## Data Process
+
+## Data Example
 You can find the processed data in [this link](https://drive.google.com/file/d/11u_XtfH_Ft_8uVT-1VTfuHmR-i0b4fdE/view?usp=sharing)
 ### MNIST (IID 10 clients) :    
 | user_id  | data_num | classes_num | entropy | 0 | ... | 9  | 
@@ -23,5 +25,4 @@ Flip the labels of a certain proportion of samples within each client. Clients 1
 Add Gaussian noise to the features of samples within each client. Participants 1 and 2 have no noise; participants 3 and 4 have 5% noise; participants 5 and 6 have 10% noise; participants 7 and 8 have 15% noise; participants 9 and 10 have 20% noise. The lower the noise percentage, the higher the contribution.
 
 ### Different Distribution & Same Size:
-Different distributions with the same data size, using Dirichlet(1.0) to partition. (challenging)
-
+Different distributions with the same data size, using Dirichlet(1.0) to partition. 

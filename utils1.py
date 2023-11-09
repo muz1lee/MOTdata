@@ -67,9 +67,9 @@ def load_data():
                                                                                       args.imb_alpha, args.data_frac)
 
 
-    sys.path.append("/Users/muz1lee/Desktop/代码/fedselect/")
+    sys.path.append("/Users/code/")
 
-    path = "/Users/muz1lee/Desktop/代码/fedselect/exp0_ot/cifar10_dFr1.0_nUs10_iid_f1.0_e100_lEp5_s1/dict_users.pkl"
+    path = "/Users/code/"
     dict_users = load_pkl(path)
     dataset = get_normal_data('mnist')
     dataset_train, dataset_test = dataset['train'], dataset['test']
@@ -86,7 +86,7 @@ def data_process(case):
     # df = check_client_class_distribution(dataset_train.targets, dict_users[0])
     # print(df)
 
-    sys_path = '/Users/muz1lee/Desktop/代码/fedselect/fedewasserstein/data/'
+    sys_path = './data/'
     # print('extract test data... ')
     # path = sys_path + 'central'
     # extract_augdata(path, dataset_test)
@@ -122,33 +122,23 @@ def data_process(case):
 
 
 def collate_fn(samples, noise=0): # feature noise
-    # samples 是一个样本列表，每个样本可以是任意数据类型
-    # 在这里可以对样本进行进一步处理和转换
-    # print(f"noise={noise}")
-    # 例如，假设每个样本都是一个元组 (image, label)
+
     images, labels = zip(*samples)
 
-    # 对图像进行处理，例如转换为 Tensor 格式、归一化等
+
     images = torch.stack(images)
     if noise > 0:
         images += torch.Tensor(np.random.normal(0.0, noise, (1, images.size(-2), images.size(-1))))
 
-    # 对标签进行处理，例如转换为 Tensor 格式
     labels = torch.tensor(labels)
 
-    # 返回处理后的批次数据
     return images, labels
 def collate_fn_label_noise(samples, label_ratio=0.0):
-    # samples 是一个样本列表，每个样本可以是任意数据类型
-    # 在这里可以对样本进行进一步处理和转换
-    # print(f"noise={noise}")
-    # 例如，假设每个样本都是一个元组 (image, label)
-    images, labels = zip(*samples)
 
-    # 对图像进行处理，例如转换为 Tensor 格式、归一化等
+
+    images, labels = zip(*samples)
     images = torch.stack(images)
 
-    # 对标签进行处理，例如转换为 Tensor格式
     labels = list(labels)
     cls_list = list(range(10))
     for i in range(len(labels)):
@@ -159,21 +149,13 @@ def collate_fn_label_noise(samples, label_ratio=0.0):
                 labels[i] = rnd_class[0]
             else:
                 labels[i] = rnd_class[1]
-    labels = torch.tensor(labels)  # labels是tuple类型。
+    labels = torch.tensor(labels) 
 
-    # 返回处理后的批次数据
     return images, labels
 def collate_fn_label_noise(samples, label_ratio=0.0):
-    # samples 是一个样本列表，每个样本可以是任意数据类型
-    # 在这里可以对样本进行进一步处理和转换
-    # print(f"noise={noise}")
-    # 例如，假设每个样本都是一个元组 (image, label)
+
     images, labels = zip(*samples)
-
-    # 对图像进行处理，例如转换为 Tensor 格式、归一化等
     images = torch.stack(images)
-
-    # 对标签进行处理，例如转换为 Tensor格式
     labels = list(labels)
     cls_list = list(range(10))
     for i in range(len(labels)):
@@ -184,9 +166,8 @@ def collate_fn_label_noise(samples, label_ratio=0.0):
                 labels[i] = rnd_class[0]
             else:
                 labels[i] = rnd_class[1]
-    labels = torch.tensor(labels)  # labels是tuple类型。
+    labels = torch.tensor(labels) 
 
-    # 返回处理后的批次数据
     return images, labels
 
 def imbalance(targets, num_users, data_frac=1.0):
@@ -306,9 +287,6 @@ def extract_augdata(path,data):
     np.save(path + 'xa.npy', XA.numpy())
 
 class DatasetSplit(Dataset):
-    """
-        数据集和Dataloader之间的接口。
-    """
 
     def __init__(self, dataset, idxs):
         self.dataset = dataset

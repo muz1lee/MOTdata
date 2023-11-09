@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from torch.utils.data import Dataset
 
-from utils1 import *
 
 from otdd.pytorch.distance import  FeatureCost
 from otdd.pytorch.moments import *

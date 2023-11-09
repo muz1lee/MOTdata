@@ -1,6 +1,7 @@
 
 This is the official implementation for the paper Data Valuation and Detections in Federated Learning.
 
+Implementation code is still under development. For more details please contact [wenqian@u.nus.edu](wenqian@u.nus.edu)
 
 ## Data Example
 You can find the processed data in [this link](https://drive.google.com/file/d/11u_XtfH_Ft_8uVT-1VTfuHmR-i0b4fdE/view?usp=sharing)

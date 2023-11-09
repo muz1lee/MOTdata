@@ -35,7 +35,6 @@ def bary_difference(diff_list):
     plt.ylabel('Error (Approx Bary - True Bary) ',size=18)
     plt.xlabel('Iterations',size=18)
     plt.legend(fontsize=18)
-    plt.savefig('/Users/muz1lee/Desktop/代码/fedselect/results/gaussian_toy.png')
     plt.show()
 
 def load_data():

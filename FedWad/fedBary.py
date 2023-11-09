@@ -1,6 +1,5 @@
 
 
-#%%
 import numpy as np
 import ot
 import torch
@@ -13,6 +12,12 @@ from ot.da import SinkhornL1l2Transport
 from msda.utils import bar_zeros_initializer
 from ot.utils import unif
 from functools import partial
+'''
+[Reference Paper] 
+1.  Rakotomamonjy, A., Nadjahi, K. and Ralaivola, L., 2023. Federated Wasserstein Distance. 
+2.  Montesuma, E.F. and Mboula, F.M.N., 2021. Wasserstein barycenter for multi-source domain adaptation. 
+3.  Just, H.A., Kang, F., Wang, J.T., Zeng, Y., Ko, M., Jin, M. and Jia, R., 2023. Lava: Data valuation without pre-specified learning algorithms.
+'''
 class localOT:
     def __init__(self, n_supp,n_localepoch, t_val=None, verbose=False,
                  get_int_list=False,
@@ -52,13 +57,9 @@ class localOT:
                 wt = wt.numpy().astype(np.float64)
             else:
                 wt = np.ones((xt.shape[0],), dtype=np.float64) / xt.shape[0]
-        # creating object for interpolation
 
         interp_G = InterpMeas(metric=self.metric, t_val=self.t_val, approx_interp=approx_interp,
                               learn_support=self.learn_support,server= self.server)
-        # interp_H = InterpMeas(metric=self.metric, t_val=self.t_val, approx_interp=approx_interp,
-        #                       learn_support=self.learn_support)
-
 
 
         list_cost = []
@@ -71,21 +72,10 @@ class localOT:
             if self.get_int_list:
                 list_int_m.append(int_m)
 
-            # on client S , int_m就是实验中的gamma
+    
             interp_G.fit(xs,xt, a=ws, b=wt)
             G, weight_G, cost_g,plan_g,unnomorlized_plan = interp_G.int_m, interp_G.weights, interp_G.cost, interp_G.plan,interp_G.unnomorlized_plan
-            interp_G.int_init = G  # G就是interpolation measure
-
-            # on client T
-            # interp_H.fit(int_m, xt, a=weight_int_m, b=wt)
-            # H, weight_H, cost_h, tplan= interp_H.int_m, interp_H.weights, interp_H.cost , interp_H.plan
-            # interp_H.int_init = H
-            # send costs, G and H to the server
-            # on server
-            # list_cost.append(cost_g + cost_h)
-            # interp_m = interp_m.fit(H, G, a=weight_H, b=weight_G)  # 对公式9的计算
-            # int_m, weight_int_m = interp_m.int_m, interp_m.weights
-            # interp_m.int_init = int_m.copy()
+            interp_G.int_init = G  
             if self.get_int_list:
                 list_int_G.append(G)
                 # list_int_H.append(H)
@@ -210,7 +200,7 @@ def interp_meas(X,Y,t_val=None,metric='sqeuclidean',approx_interp=True,
     unnomorlized_GO = ot.emd(a, b, M)
     
     t = np.random.rand(1) if t_val==None else t_val
-    #print('t',t)
+
     if approx_interp:
         Z = (1-t)*X + t*(G0*nx)@Y #对应公式(10) GO就是transportation plan( OT matrix )
         weights =  np.ones((nx,),dtype=np.float64) / nx
@@ -416,7 +406,6 @@ if __name__ == '__main__':
     dim = xs.shape[1]
     random_val_init = 1
     num_users= 3
-    # 初始化interpolating measure in global side
 
 
     int_m = [np.random.randn(n_supp, dim) * random_val_init]* num_users
@@ -428,12 +417,10 @@ if __name__ == '__main__':
     total_cost = []
     new_Q = 0
     for i in range(n_epoch):
-        print('i',i)
         cost_lc = []
         local_eta = []
         local_weights=[]
         for idx,client in enumerate(client_list):
-            # 每个client本地计算local和gamma的距离
             fedot = localOT(n_supp=100, n_localepoch=n_localepoch, t_val=t_val).fit(client, int_m[idx],weight_int_m[idx])
             cost_lc.append(fedot.cost)
             local_eta.append(fedot.eta)
@@ -447,43 +434,18 @@ if __name__ == '__main__':
         for idx in range(num_users):
 
             print('client {}'.format(idx))
-            # server计算三个不同的eta_Q
+
             fedot_server = localOT(n_supp=100, n_localepoch=n_localepoch, t_val=t_val).fit(x_bary, int_m[idx],wint_m =weight_int_m[idx])
 
             global_eta.append(fedot_server.eta)
-            # server和client两两之间的eta要最小化
+   
             interp_m = InterpMeas(metric='sqeuclidean', t_val=t_val, approx_interp=True,
                                   learn_support= False)
             interp_m = interp_m.fit(local_eta[idx], fedot_server.eta, a=local_weights[idx], b=fedot_server.localweight)  # 对公式9的计算
 
-            # sourceplan = fedot_server.unnomorlized_plan
-            # support = np.dot(sourceplan.T, int_m[idx])
-            #更新gamma
             int_m[idx], weight_int_m[idx] = interp_m.int_m, interp_m.weights
-            # interp_m.int_init = int_m.copy()
 
-            # sourceplan = fedot_server.sourceplan[0].T
-            # inter_support = fedot_server.inter_support
 
-            #
-            # gammai = localOT(n_supp=100, n_localepoch=n_localepoch, t_val=t_val).fit(fedot_server.int_meas, local_eta[idx])
-            #
-            # support = np.dot(fedot_server.sourceplan,x_bary)
-            # cost_ls.append(fedot_server.cost)
-            # global_gamma.append(gammai.int_meas)
-
-            # supports.append( support)
-            # new_Q += np.array(support)
-        # 更新Q
-        # int_m_copy = int_m
-        # new_Q = barycenter_calculation(int_m_copy)
         x_bary = barycenter_calculation(int_m)
-        print('x_bary', x_bary)
-        # int_m = global_gamma
-    #     total_cost.append(np.sum(cost_lc)+ np.sum(cost_ls))
-    # print('total_cost',total_cost[-1])
-    # print(x_bary)
 
 
-
-    print('x_bary',x_bary)

@@ -202,14 +202,12 @@ def interp_meas(X,Y,t_val=None,metric='sqeuclidean',approx_interp=True,
     t = np.random.rand(1) if t_val==None else t_val
 
     if approx_interp:
-        Z = (1-t)*X + t*(G0*nx)@Y #对应公式(10) GO就是transportation plan( OT matrix )
+        Z = (1-t)*X + t*(G0*nx)@Y 
         weights =  np.ones((nx,),dtype=np.float64) / nx
     else:
         Z, weights = get_interp_measure(X,Y,G0,t)
     cost = np.sum(G0*M)**(1/p)
-    # 计算source到interpolating measure 的plan , 这里权重我用的都是uniform的
-    # M_s = ot.dist(X, Z, metric=metric)
-    # norm = np.max(M_s) if np.max(M_s) > 1 else 1
+    
     G0_s =None
 
     return Z, weights, cost, G0,G0_s , unnomorlized_GO
@@ -343,14 +341,7 @@ class InterpMeas:
 
 
 
-def values(dual_sol, training_size):
-    dualsol = dual_sol
 
-    f1k = np.array(dualsol.squeeze())
-
-    trainGradient = [0] * training_size
-    trainGradient = (1 + 1 / (training_size - 1)) * f1k - sum(f1k) / (training_size - 1)
-    return list(trainGradient)
     
 def extract_augdata(data,name,path=None):
     targets1, classes1, idxs1 = extract_data_targets(data)
@@ -370,17 +361,6 @@ def extract_augdata(data,name,path=None):
     XA = augmented_dataset(DA, means=M1, covs=C1, maxn=10000)
     return XA
 
-def ratio(counts,index,shuffle_ind):
-    ls = []
-    for item in counts:
-        ls.append(index[item])
-    k = 0
-    print(len(ls))
-    for item in ls:
-        if item in shuffle_ind:
-            k += 1
-
-    return k / len(shuffle_ind), k
     
 
 def barycenter_calculation(Xs):
@@ -395,46 +375,6 @@ def barycenter_calculation(Xs):
     bary, couplings = barycenter_solver(mu_s=mu_s, Xs=Xs, Xbar=Xbar)
     return bary
 
-def detections_case(training_size,valid_size,resize,portion, n_supp ,n_epoch ,t_val=0.5):
-    loss = geomloss.SamplesLoss(
-        loss='sinkhorn', p=2,
-        # cost=cost_geomloss,
-        debias=True,
-        blur=0.1 ** (1 / 2),
-        backend='tensorized',
-        potentials=True
-    )
-
-    loaders, shuffle_ind = load_data_corrupted(corrupt_type='shuffle', dataname='MNIST', resize=resize,
-                                               training_size=training_size, test_size=valid_size, currupt_por=portion)
-
-    trainloader = loaders['train']
-    testloader = loaders['test']
-    index = trainloader.sampler.indices
-
-    path = None
-    XA = extract_augdata(trainloader,'train',path)
-    XT = extract_augdata(testloader,'test',path)
-
-    fedot_pt = localOT(n_supp=n_supp, n_epoch=n_epoch, metric='sqeuclidean', t_val=t_val,get_int_list=True)
-    fedot_pt = fedot_pt.fit(XA, XT.requires_grad_(True)) # This is a simple detection case with accessing local data.
-    int_meas1 = fedot_pt.int_meas
-    client_int_meas =fedot_pt.list_int_G[-1]
-    server_int_meas = fedot_pt.list_int_H[-1]
-
-    t_c_meas = torch.from_numpy(client_int_meas).double()
-    t_s_meas = torch.from_numpy(server_int_meas).double()
-    t_int_meas1= torch.from_numpy(int_meas1).double()
-    t_XA =XA.double()
-    t_XT = XT.double()
-
-    dual = np.array(loss(t_XA, t_XT)[0])
-    
-    value = values(torch.from_numpy(dual), len(XA))
-    counts = np.where(np.array(value) > 0)[0]
-    result, count_num = ratio(counts, index, shuffle_ind)
-
-    return result, count_num
     
 if __name__ == '__main__':
 
@@ -519,7 +459,7 @@ if __name__ == '__main__':
    
             interp_m = InterpMeas(metric='sqeuclidean', t_val=t_val, approx_interp=True,
                                   learn_support= False)
-            interp_m = interp_m.fit(local_eta[idx], fedot_server.eta, a=local_weights[idx], b=fedot_server.localweight)  # 对公式9的计算
+            interp_m = interp_m.fit(local_eta[idx], fedot_server.eta, a=local_weights[idx], b=fedot_server.localweight)  
 
             int_m[idx], weight_int_m[idx] = interp_m.int_m, interp_m.weights
 

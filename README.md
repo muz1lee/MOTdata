@@ -1,4 +1,5 @@
 
+This is an official implementation for ``Data Valuation and Detections in Federated Learning '' https://arxiv.org/abs/2311.05304
 
 You can follow the example of cifar10_fed.ipynb
 

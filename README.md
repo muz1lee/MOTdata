@@ -1,10 +1,21 @@
+2024.4.10 The code for ``Private Wasserstein Distance with Random Noises'' is still under development. 
 
-This is an official implementation for ``Data Valuation and Detections in Federated Learning '' https://arxiv.org/abs/2311.05304
+This is an official implementation for ``Data Valuation and Detections in Federated Learning '' https://arxiv.org/abs/2311.05304.
 
 You can follow the example of cifar10_fed.ipynb
 
+If you use our code and find it useful, please cite 
+```
+@article{li2023data,
+  title={Data Valuation and Detections in Federated Learning},
+  author={Li, Wenqian and Fu, Shuran and Zhang, Fengrui and Pang, Yan},
+  journal={arXiv preprint arXiv:2311.05304},
+  year={2023}
+}
+```
 
-If you use our code, please cite following papers:
+
+Our code are also devloped based on the following papers,  please also cite following papers:
 
 ```
 @article{rakotomamonjy2023federated,
@@ -19,14 +30,6 @@ If you use our code, please cite following papers:
   title={Lava: Data valuation without pre-specified learning algorithms},
   author={Just, Hoang Anh and Kang, Feiyang and Wang, Jiachen T and Zeng, Yi and Ko, Myeongseob and Jin, Ming and Jia, Ruoxi},
   journal={arXiv preprint arXiv:2305.00054},
-  year={2023}
-}
-```
-```
-@article{li2023data,
-  title={Data Valuation and Detections in Federated Learning},
-  author={Li, Wenqian and Fu, Shuran and Zhang, Fengrui and Pang, Yan},
-  journal={arXiv preprint arXiv:2311.05304},
   year={2023}
 }
 ```

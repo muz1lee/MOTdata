@@ -1,4 +1,4 @@
-2024.4.10 The code for ``Private Wasserstein Distance with Random Noises'' is still under development. 
+
 
 This is an official implementation for ``Data Valuation and Detections in Federated Learning '' https://arxiv.org/abs/2311.05304.
 

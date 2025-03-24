@@ -1,6 +1,6 @@
 
 
-This is an official implementation for ``Data Valuation and Detections in Federated Learning '' https://arxiv.org/abs/2311.05304.
+This is an official implementation for Data Valuation and Detections in Federated Learning (https://arxiv.org/abs/2311.05304)
 
 You can follow the example of cifar10_fed.ipynb
 
@@ -11,5 +11,13 @@ If you use our code and find it useful, please cite
   author={Li, Wenqian and Fu, Shuran and Zhang, Fengrui and Pang, Yan},
   journal={arXiv preprint arXiv:2311.05304},
   year={2023}
+}
+```
+```
+@article{li2024private,
+  title={Private Wasserstein Distance},
+  author={Li, Wenqian and Pang, Yan},
+  journal={arXiv preprint arXiv:2404.06787},
+  year={2024}
 }
 ```
